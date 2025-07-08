@@ -9,12 +9,25 @@ use zip::write::FileOptions;
 
 #[derive(Debug, palc::Parser)]
 pub struct Args {
+    /// specify a password, optional
+    #[arg(short = 'p')]
+    password: Option<String>,
+
+    /// whether to add an QRCode overlap for password
+    #[arg(short = 'S')]
+    qrcode_overlap: bool,
+
     img: PathBuf,
     path: Vec<PathBuf>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let Args { img, path } = palc::Parser::parse();
+    let Args {
+        img,
+        path,
+        password,
+        qrcode_overlap: _todo,
+    } = palc::Parser::parse();
 
     let output_fn = img
         .file_name()
@@ -38,10 +51,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     output.write_all(&img_data)?;
 
     let mut writer = zip::ZipWriter::new(output);
-    let options: FileOptions<'_, ()> = FileOptions::default()
+    let mut options: FileOptions<'_, ()> = FileOptions::default()
         .large_file(false)
         .compression_level(None)
         .compression_method(zip::CompressionMethod::Deflated);
+
+    if let Some(password) = password.as_deref() {
+        options = options.with_aes_encryption(zip::AesMode::Aes256, password);
+    }
 
     let mut path_to_pack = Vec::new();
 

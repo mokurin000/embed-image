@@ -5,10 +5,7 @@ edition = "2024"
 
 [dependencies]
 palc = "0.0.1"
-zip = { version = "4.2.0", default-features = false, features = [
-    "deflate",
-    "zeroize",
-] }
+zip = { version = "4.2.0", default-features = false, features = ["aes-crypto", "deflate", "zeroize"] }
 
 [profile.release]
 strip = true
