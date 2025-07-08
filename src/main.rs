@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for path in path_to_pack {
         writer.start_file_from_path(&path, options)?;
-        writer.write(&fs::read(&path)?)?;
+        writer.write_all(&fs::read(&path)?)?;
     }
 
     writer.finish()?;
