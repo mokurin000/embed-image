@@ -1,3 +1,7 @@
 /target
 
-*.png
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.mp4

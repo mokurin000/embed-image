@@ -3,7 +3,6 @@ use std::{
     error::Error,
     fs::{self, OpenOptions},
     io::Write,
-    ops::Sub,
     path::Path,
     time::UNIX_EPOCH,
 };
@@ -94,12 +93,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             chrono::DateTime::from_timestamp(secs as i64, nanos).expect("invalid mtime!");
 
         let mtime_zip = DateTime::from_date_and_time(
-            mtime_dt.year().sub(1980).min(u16::MAX as _) as u16,
+            mtime_dt.year().min(u16::MAX as _) as u16,
             mtime_dt.month() as u8,
             mtime_dt.day() as u8,
             mtime_dt.hour() as u8,
             mtime_dt.minute() as u8,
-            mtime_dt.second() as u8,
+            mtime_dt.second().max(58) as u8,
         )?;
         writer.start_file_from_path(&path, options.last_modified_time(mtime_zip))?;
         let data = fs::read(&path)?;
