@@ -3,59 +3,22 @@ use std::{
     error::Error,
     fs::{self, OpenOptions},
     io::{BufReader, Write},
-    ops::Div,
-    path::{Path, PathBuf},
+    ops::{Div, Sub},
+    path::Path,
+    time::UNIX_EPOCH,
 };
 
+use chrono::{Datelike, Timelike};
 use image::{EncodableLayout, ImageEncoder as _, Rgba, codecs::png::PngEncoder, imageops::overlay};
 use qrencode::{EcLevel, QrCode};
 use spdlog::{error, info, warn};
-use zip::write::FileOptions;
+use zip::{DateTime, write::FileOptions};
 
-#[derive(Debug, palc::Parser)]
-pub struct Args {
-    /// specify a password, optional
-    #[arg(long, short = 'p')]
-    password: Option<String>,
-
-    /// add an QRCode overlap for password
-    #[arg(long, short = 'Q')]
-    qrcode_overlap: bool,
-
-    /// has quiet zone of QR Code
-    ///
-    /// can be: `true`/`false`
-    ///
-    /// Quiet zone means the surrounding blank area
-    #[arg(long, short = 'q', default_value_t = true)]
-    has_quiet_zone: std::primitive::bool, // workaround: bypass `bool` match
-
-    /// Position of QR code.
-    ///
-    /// Can be one of `top-left` (default), `top-right`, `bottom-left`, `bottom-right`, `center`
-    ///
-    /// will fallback to default on invalid input.
-    #[arg(long, short = 'P')]
-    qr_position: Option<String>,
-
-    /// Color of QR Code foreground (the bar itself)
-    ///
-    /// format: CSS3 Color
-    #[arg(long, default_value = "#000000ff")]
-    qrcode_fg_color: String,
-    /// Color of QR Code background (The blank background)
-    ///
-    /// format: CSS3 Color
-    #[arg(long, default_value = "ffffffff")]
-    qrcode_bg_color: String,
-
-    /// target file. if enabled `qrcode_overlap, must be one of PNG, JPEG and WEBP.`
-    img: PathBuf,
-    path: Vec<PathBuf>,
-}
+mod args;
+mod walk;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let Args {
+    let args::Args {
         img,
         path,
         password,
@@ -70,20 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         error!("input image not existing!");
     }
 
-    let output_fn = img
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .split(".")
-        .nth(0)
-        .unwrap()
-        .to_string()
-        + "_merged."
-        + &if qrcode_overlap {
-            Cow::from("png")
-        } else {
-            img.extension().unwrap().to_string_lossy()
-        };
+    let output_fn = output_filename(&img, qrcode_overlap).expect("failed to parse image filename");
 
     let mut output = OpenOptions::new()
         .append(false)
@@ -177,11 +127,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut path_to_pack = Vec::new();
 
     for p in path {
-        visit_dirs_or_file(p, &mut path_to_pack)?;
+        walk::visit_dirs_or_file(p, &mut path_to_pack)?;
     }
 
     for path in path_to_pack {
-        writer.start_file_from_path(&path, options)?;
+        let mtime = path.metadata()?.modified()?.duration_since(UNIX_EPOCH)?;
+        let secs = mtime.as_secs();
+        let nanos = mtime.subsec_nanos();
+        let mtime_dt =
+            chrono::DateTime::from_timestamp(secs as i64, nanos).expect("invalid mtime!");
+
+        let mtime_zip = DateTime::from_date_and_time(
+            mtime_dt.year().sub(1980).min(u16::MAX as _) as u16,
+            mtime_dt.month() as u8,
+            mtime_dt.day() as u8,
+            mtime_dt.hour() as u8,
+            mtime_dt.minute() as u8,
+            mtime_dt.second() as u8,
+        )?;
+        writer.start_file_from_path(&path, options.last_modified_time(mtime_zip))?;
         let data = fs::read(&path)?;
         let size = humansize::format_size(data.len(), humansize::BINARY);
         info!("read {} of {size}, compressing...", path.to_string_lossy(),);
@@ -195,26 +159,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn visit_dirs_or_file(
-    path: impl AsRef<Path>,
-    append_to: &mut Vec<PathBuf>,
-) -> Result<(), Box<dyn Error>> {
-    let path = path.as_ref();
-    if path.is_file() {
-        append_to.push(path.to_path_buf());
-        return Ok(());
-    }
-
-    let dir = fs::read_dir(path)?;
-    for entry in dir.flatten() {
-        let path = entry.path();
-
-        if path.is_dir() {
-            visit_dirs_or_file(path, append_to)?;
-        } else if path.is_file() {
-            append_to.push(path);
-        }
-    }
-
-    Ok(())
+fn output_filename(img: impl AsRef<Path>, qrcode_overlap: bool) -> Option<String> {
+    Some(
+        img.as_ref()
+            .file_name()?
+            .to_string_lossy()
+            .split(".")
+            .nth(0)?
+            .to_string()
+            + "_merged."
+            + &if qrcode_overlap {
+                Cow::from("png")
+            } else {
+                img.as_ref().extension().unwrap().to_string_lossy()
+            },
+    )
 }
