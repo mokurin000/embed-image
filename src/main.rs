@@ -22,13 +22,17 @@ pub struct Args {
     #[arg(long, short = 'Q')]
     qrcode_overlap: bool,
 
-    /// remove quiet zone of QR Code
+    /// has quiet zone of QR Code
+    ///
+    /// can be: `true`/`false`
     ///
     /// Quiet zone means the surrounding blank area
-    #[arg(long, short = 'q')]
-    remove_quiet_zone: bool,
+    #[arg(long, short = 'q', default_value_t = true)]
+    has_quiet_zone: std::primitive::bool, // workaround: bypass `bool` match
 
-    /// Position of QR code. Can be one of `top-left` (default), `top-right`, `bottom-left`, `bottom-right`
+    /// Position of QR code.
+    ///
+    /// Can be one of `top-left` (default), `top-right`, `bottom-left`, `bottom-right`
     ///
     /// will fallback to default on invalid input.
     #[arg(long, short = 'P')]
@@ -46,7 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         password,
         qr_position,
         qrcode_overlap,
-        remove_quiet_zone,
+        has_quiet_zone,
     } = palc::Parser::parse();
 
     if !img.exists() {
@@ -98,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let qrcode_img = QrCode::with_error_correction_level(pass, EcLevel::H)?
             .render::<image::Rgba<u16>>()
             .max_dimensions(pixel_len, pixel_len)
-            .quiet_zone(!remove_quiet_zone)
+            .quiet_zone(has_quiet_zone)
             .build();
 
         let (x, y) = match qr_position.as_deref() {
