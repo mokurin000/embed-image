@@ -32,7 +32,7 @@ pub struct Args {
 
     /// Position of QR code.
     ///
-    /// Can be one of `top-left` (default), `top-right`, `bottom-left`, `bottom-right`
+    /// Can be one of `top-left` (default), `top-right`, `bottom-left`, `bottom-right`, `center`
     ///
     /// will fallback to default on invalid input.
     #[arg(long, short = 'P')]
@@ -109,6 +109,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some("top-right") => (orig_width - pixel_len, 0),
             Some("bottom-left") => (0, orig_height - pixel_len),
             Some("bottom-right") => (orig_width - pixel_len, orig_height - pixel_len),
+            Some("center") => ((orig_width - pixel_len) / 2, (orig_height - pixel_len) / 2),
             Some(pos) => {
                 if pos != "top-left" {
                     warn!("unknown position {pos}, falling back to top-left");
