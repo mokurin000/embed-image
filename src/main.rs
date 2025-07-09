@@ -2,19 +2,21 @@ use std::{
     borrow::Cow,
     error::Error,
     fs::{self, OpenOptions},
-    io::{BufReader, Write},
-    ops::{Div, Sub},
+    io::Write,
+    ops::Sub,
     path::Path,
     time::UNIX_EPOCH,
 };
 
 use chrono::{Datelike, Timelike};
-use image::{EncodableLayout, ImageEncoder as _, Rgba, codecs::png::PngEncoder, imageops::overlay};
-use qrencode::{EcLevel, QrCode};
+
 use spdlog::{error, info, warn};
 use zip::{DateTime, write::FileOptions};
 
+use crate::overlay::write_overlayed_image;
+
 mod args;
+mod overlay;
 mod walk;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -22,8 +24,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         img,
         path,
         password,
-        qr_position,
         qrcode_overlap,
+        qr_position,
         has_quiet_zone,
         qrcode_fg_color,
         qrcode_bg_color,
@@ -44,63 +46,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     info!("reading source image");
 
-    if let Some(pass) = password.as_deref()
+    if let Some(text) = password.as_deref()
         && qrcode_overlap
     {
-        let file = OpenOptions::new().read(true).create(false).open(img)?;
-        let bufreader = BufReader::new(file);
-
-        info!("start pixel converting");
-
-        let mut orig_image = image::io::Reader::new(bufreader)
-            .with_guessed_format()?
-            .decode()?
-            .to_rgba8(); // use RGBA8 to better save space
-
-        info!("start QR Code generation");
-
-        let orig_width = orig_image.width();
-        let orig_height = orig_image.height();
-        let pixel_len = orig_width.min(orig_height).div(3).max(200);
-
-        let fg_color = csscolorparser::parse(&qrcode_fg_color)?.to_rgba8();
-        let bg_color = csscolorparser::parse(&qrcode_bg_color)?.to_rgba8();
-        let qrcode_img = QrCode::with_error_correction_level(pass, EcLevel::H)?
-            .render::<image::Rgba<u8>>()
-            .max_dimensions(pixel_len, pixel_len)
-            .quiet_zone(has_quiet_zone)
-            .light_color(Rgba(bg_color))
-            .dark_color(Rgba(fg_color))
-            .build();
-        let real_pixel_len = qrcode_img.width();
-
-        let (x, y) = match qr_position.as_deref() {
-            Some("top-right") => (orig_width - real_pixel_len, 0),
-            Some("bottom-left") => (0, orig_height - real_pixel_len),
-            Some("bottom-right") => (orig_width - real_pixel_len, orig_height - real_pixel_len),
-            Some("center") => (
-                (orig_width - real_pixel_len) / 2,
-                (orig_height - real_pixel_len) / 2,
-            ),
-            Some(pos) => {
-                if pos != "top-left" {
-                    warn!("unknown position {pos}, falling back to top-left");
-                }
-                (0, 0)
-            }
-            _ => (0, 0),
-        };
-
-        info!("overlapping QR Code on original image");
-        overlay(&mut orig_image, &qrcode_img, x.into(), y.into());
-
-        info!("writing overlapped image");
-        let encoder = PngEncoder::new(&mut output);
-        encoder.write_image(
-            orig_image.as_bytes(),
-            orig_image.width(),
-            orig_image.height(),
-            image::ColorType::Rgba8,
+        write_overlayed_image(
+            img,
+            &mut output,
+            has_quiet_zone,
+            qr_position,
+            qrcode_fg_color,
+            qrcode_bg_color,
+            text,
         )?;
     } else {
         if qrcode_overlap {
