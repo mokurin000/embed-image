@@ -104,12 +104,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             .max_dimensions(pixel_len, pixel_len)
             .quiet_zone(has_quiet_zone)
             .build();
+        let real_pixel_len = qrcode_img.width();
 
         let (x, y) = match qr_position.as_deref() {
-            Some("top-right") => (orig_width - pixel_len, 0),
-            Some("bottom-left") => (0, orig_height - pixel_len),
-            Some("bottom-right") => (orig_width - pixel_len, orig_height - pixel_len),
-            Some("center") => ((orig_width - pixel_len) / 2, (orig_height - pixel_len) / 2),
+            Some("top-right") => (orig_width - real_pixel_len, 0),
+            Some("bottom-left") => (0, orig_height - real_pixel_len),
+            Some("bottom-right") => (orig_width - real_pixel_len, orig_height - real_pixel_len),
+            Some("center") => ((orig_width - real_pixel_len) / 2, (orig_height - real_pixel_len) / 2),
             Some(pos) => {
                 if pos != "top-left" {
                     warn!("unknown position {pos}, falling back to top-left");
